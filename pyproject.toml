@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gh-nudger"
+version = "0.1.0"
+description = "Periodically nudge @cursor on new PR reviews via gh cli"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Dave Fowler" }]
+dependencies = []
+
+[project.scripts]
+gh-nudger = "gh_nudger.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
