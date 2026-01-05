@@ -74,6 +74,13 @@ def gh_current_user_login() -> str:
     return login
 
 
+def try_gh_current_user_login() -> Optional[str]:
+    try:
+        return gh_current_user_login()
+    except GhError:
+        return None
+
+
 @dataclass(frozen=True)
 class PrRef:
     repo: str  # owner/name
