@@ -8,7 +8,8 @@ from .config import Config
 from .github import (
     PrRef,
     gh_api_post_comment,
-    gh_current_user_login,
+    GhError,
+    try_gh_current_user_login,
     list_open_prs_for_repo,
     list_prs_from_notifications,
     list_reviews,
@@ -48,20 +49,30 @@ class CycleResult:
 
 
 def run_once(config: Config, state: StateStore, *, dry_run: bool, verbose: bool) -> CycleResult:
-    current_login = gh_current_user_login() if config.ignore_self_reviews else None
+    current_login = try_gh_current_user_login() if config.ignore_self_reviews else None
+    if config.ignore_self_reviews and current_login is None and verbose:
+        print("[warn] Unable to determine current user via `gh api user`; not ignoring self reviews")
 
     candidates: dict[tuple[str, int], PrRef] = {}
 
     if config.use_notifications:
-        for pr in list_prs_from_notifications(
-            participating_only=config.participating_only,
-            include_all=config.include_all_notifications,
-        ):
-            candidates[(pr.repo, pr.number)] = pr
+        try:
+            for pr in list_prs_from_notifications(
+                participating_only=config.participating_only,
+                include_all=config.include_all_notifications,
+            ):
+                candidates[(pr.repo, pr.number)] = pr
+        except GhError as exc:
+            if verbose:
+                print(f"[warn] Unable to read notifications; falling back to repo allowlist only: {exc}")
 
     for repo in config.repos:
-        for pr in list_open_prs_for_repo(repo):
-            candidates[(pr.repo, pr.number)] = pr
+        try:
+            for pr in list_open_prs_for_repo(repo):
+                candidates[(pr.repo, pr.number)] = pr
+        except GhError as exc:
+            if verbose:
+                print(f"[warn] Unable to list PRs for {repo}; skipping: {exc}")
 
     considered = 0
     new_reviews = 0
@@ -72,7 +83,12 @@ def run_once(config: Config, state: StateStore, *, dry_run: bool, verbose: bool)
     for pr in sorted(candidates.values(), key=lambda x: (x.repo, x.number)):
         considered += 1
 
-        reviews = list_reviews(pr.repo, pr.number)
+        try:
+            reviews = list_reviews(pr.repo, pr.number)
+        except GhError as exc:
+            if verbose:
+                print(f"[warn] Unable to read reviews for {pr.repo}#{pr.number}; skipping: {exc}")
+            continue
         filtered = []
         for review in reviews:
             if review.state in set(config.ignore_review_states):
@@ -91,12 +107,12 @@ def run_once(config: Config, state: StateStore, *, dry_run: bool, verbose: bool)
             continue
 
         new_reviews += 1
-        # Always update last-seen marker so we don't repeatedly process the same review.
-        state.upsert_pr_seen_review(pr.repo, pr.number, latest.id, latest.submitted_at)
 
-        existing_after = state.get_pr(pr.repo, pr.number)
-        if existing_after and existing_after.review_nudge_count >= config.max_review_nudges_per_pr:
+        if existing and existing.review_nudge_count >= config.max_review_nudges_per_pr:
             skipped_max += 1
+            # No further nudges will happen; mark as seen to avoid re-processing forever
+            if not dry_run:
+                state.upsert_pr_seen_review(pr.repo, pr.number, latest.id, latest.submitted_at)
             if verbose:
                 print(
                     f"[skip:max] {pr.repo}#{pr.number} reached max_review_nudges_per_pr="
@@ -104,8 +120,8 @@ def run_once(config: Config, state: StateStore, *, dry_run: bool, verbose: bool)
                 )
             continue
 
-        if existing_after and _within_cooldown(
-            existing_after.last_nudge_at, config.review_nudge_cooldown_seconds
+        if existing and _within_cooldown(
+            existing.last_nudge_at, config.review_nudge_cooldown_seconds
         ):
             skipped_cooldown += 1
             if verbose:
@@ -115,8 +131,10 @@ def run_once(config: Config, state: StateStore, *, dry_run: bool, verbose: bool)
                 )
             continue
 
-        if existing_after and existing_after.last_nudged_review_id == latest.id:
+        if existing and existing.last_nudged_review_id == latest.id:
             # Should be rare since we also track last_seen, but keep it safe.
+            if not dry_run:
+                state.upsert_pr_seen_review(pr.repo, pr.number, latest.id, latest.submitted_at)
             continue
 
         if verbose or dry_run:
@@ -124,6 +142,7 @@ def run_once(config: Config, state: StateStore, *, dry_run: bool, verbose: bool)
 
         if not dry_run:
             gh_api_post_comment(pr.repo, pr.number, config.review_nudge_message)
+            state.upsert_pr_seen_review(pr.repo, pr.number, latest.id, latest.submitted_at)
             state.record_review_nudge(pr.repo, pr.number, latest.id)
 
         nudges_sent += 1

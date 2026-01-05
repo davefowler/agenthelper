@@ -30,12 +30,19 @@ gh auth status
 python3 -m pip install -e .
 ```
 
+If `gh-nudger` isn’t on your `PATH`, you can run it as a module:
+
+```bash
+python3 -m gh_nudger --help
+```
+
 ### Configure
 
 Create `~/.config/gh-nudger/config.toml` if missing:
 
 ```bash
 gh-nudger init
+# or: python3 -m gh_nudger init
 ```
 
 Edit the generated config to add/remove repos as needed.
@@ -44,6 +51,7 @@ Edit the generated config to add/remove repos as needed.
 
 ```bash
 gh-nudger run --dry-run --verbose
+# or: python3 -m gh_nudger run --dry-run --verbose
 ```
 
 ### Run periodically
