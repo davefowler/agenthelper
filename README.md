@@ -6,6 +6,7 @@ A Python tool that monitors GitHub PRs and issues, automatically commenting `@cu
 
 - Monitors your GitHub PRs for failed checks (tests, linting, etc.)
 - Detects when reviews request changes
+- **Detects merge conflicts that need resolving**
 - Automatically posts `@cursor` comments to kick off agent work
 - **Tags all comments with `🤖 *agenthelper*`** so you can identify them
 - Runs continuously as a background service on macOS
@@ -88,6 +89,7 @@ python3 find_comments.py davefowler/dataface 96
    - Checks each PR for:
      - Failed check runs (tests, linting, etc.)
      - Review requests that require changes
+     - Merge conflicts that need resolving
    - Posts `@cursor` comments when issues are detected
    - Tracks when comments were posted to avoid duplicates
 
