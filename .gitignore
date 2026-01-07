@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.log
+.last_check.json
+.comment_history.json
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+

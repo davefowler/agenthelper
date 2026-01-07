@@ -1,0 +1,11 @@
+{
+  "check_interval": 300,
+  "repos": [
+    "davefowler/agenthelper",
+    "davefowler/dataface",
+    "davefowler/annote",
+    "davefowler/asql",
+    "davefowler/markdown-svg"
+  ]
+}
+
