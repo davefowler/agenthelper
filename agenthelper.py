@@ -520,16 +520,34 @@ class GitHubMonitor:
             
             if should_post_review:
                 # Check if we've already commented on code review for this PR
-                if self.has_commented_on_issue(repo, pr_number, 'code_review'):
-                    logger.info(f"  Skipping - already commented on code review for {check_key}")
-                else:
+                # But allow commenting again if this review is newer than our last comment
+                history_key = f"{check_key}:code_review"
+                last_comment_time_str = self.comment_history.get(history_key)
+                
+                should_comment = True
+                if last_comment_time_str:
+                    try:
+                        last_comment_time = datetime.fromisoformat(last_comment_time_str)
+                        review_time = datetime.fromisoformat(review_time_str.replace('Z', '+00:00'))
+                        if review_time.tzinfo:
+                            review_time = review_time.replace(tzinfo=None) - review_time.utcoffset()
+                        
+                        # Only skip if this review is older than or equal to our last comment
+                        if review_time <= last_comment_time:
+                            should_comment = False
+                            logger.info(f"  Skipping - review ({review_time_str}) is older than our last comment ({last_comment_time_str})")
+                        else:
+                            logger.info(f"  Review ({review_time_str}) is newer than our last comment ({last_comment_time_str}) - will comment")
+                    except (ValueError, TypeError) as e:
+                        logger.debug(f"Could not compare timestamps: {e}")
+                
+                if should_comment:
                     comment = f"@cursor please review the code review from {reviewer}. If you see critical or serious issues, fix them. If it's just positive feedback with no actionable items, ignore it and don't commit any changes."
                     logger.info(f"  Posting comment for code review from {reviewer}")
                     if self.post_comment(repo, pr_number, comment):
                         self.last_checks[check_key] = datetime.now().isoformat()
                         self.save_last_checks()
-                        # Track that we commented on this issue type
-                        history_key = f"{check_key}:code_review"
+                        # Track that we commented on this issue type (update timestamp)
                         self.comment_history[history_key] = datetime.now().isoformat()
                         self.save_comment_history()
                         logger.info(f"✓ Posted @cursor comment on {check_key} due to code review")
