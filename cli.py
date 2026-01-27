@@ -5,6 +5,8 @@ agenthelper CLI - Manage and monitor the GitHub PR helper
 import argparse
 import json
 import os
+import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -49,8 +51,15 @@ def get_repos() -> List[str]:
     return config.get('repos', [])
 
 
+def is_macos() -> bool:
+    """Check if running on macOS"""
+    return platform.system() == 'Darwin'
+
+
 def is_running() -> bool:
-    """Check if agenthelper service is running"""
+    """Check if agenthelper service is running (macOS only)"""
+    if not is_macos():
+        return False
     try:
         result = subprocess.run(
             ['launchctl', 'list'],
@@ -61,20 +70,14 @@ def is_running() -> bool:
         return False
 
 
-def run_gh_command(args: List[str]) -> Optional[str]:
-    """Run a GitHub CLI command and return output"""
-    try:
-        result = subprocess.run(
-            ['gh'] + args,
-            capture_output=True, text=True, check=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        return None
-
-
 def cmd_start(args: argparse.Namespace) -> int:
-    """Start the agenthelper service"""
+    """Start the agenthelper service (macOS only - uses launchd)"""
+    # Check platform
+    if not is_macos():
+        print(color("Error: The start/stop commands only work on macOS (uses launchd).", Colors.RED))
+        print("On other platforms, run the agent directly: python3 agenthelper.py")
+        return 1
+    
     # Check prerequisites
     if subprocess.run(['which', 'gh'], capture_output=True).returncode != 0:
         print(color("Error: GitHub CLI (gh) is not installed.", Colors.RED))
@@ -97,7 +100,6 @@ def cmd_start(args: argparse.Namespace) -> int:
     
     # Copy plist to LaunchAgents
     print("Installing launchd service...")
-    import shutil
     shutil.copy(PLIST_PATH, LAUNCHD_PATH)
     
     # Load the service
@@ -125,7 +127,13 @@ def cmd_start(args: argparse.Namespace) -> int:
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
-    """Stop the agenthelper service"""
+    """Stop the agenthelper service (macOS only - uses launchd)"""
+    # Check platform
+    if not is_macos():
+        print(color("Error: The start/stop commands only work on macOS (uses launchd).", Colors.RED))
+        print("On other platforms, stop the agent process manually (e.g., pkill -f agenthelper.py)")
+        return 1
+    
     if is_running():
         subprocess.run(['launchctl', 'unload', str(LAUNCHD_PATH)], capture_output=True)
         if LAUNCHD_PATH.exists():
@@ -147,7 +155,8 @@ def cmd_log(args: argparse.Namespace) -> int:
     else:
         lines = args.lines or 50
         os.execvp('tail', ['tail', f'-{lines}', str(LOG_PATH)])
-    return 0
+    # Note: os.execvp replaces the process, so this line is only reached on error
+    return 1
 
 
 def cmd_repos(args: argparse.Namespace) -> int:
