@@ -65,11 +65,40 @@ class GitHubMonitor:
         with open(self.comment_history_file, 'w') as f:
             json.dump(self.comment_history, f, indent=2)
     
-    def has_commented_on_issue(self, repo: str, pr_number: int, issue_type: str) -> bool:
-        """Check if we've already commented on a specific issue type for this PR"""
+    def get_comment_count(self, repo: str, pr_number: int, issue_type: str) -> int:
+        """Get how many times we've commented on a specific issue type for this PR"""
         check_key = f"{repo}#{pr_number}"
         history_key = f"{check_key}:{issue_type}"
-        return history_key in self.comment_history
+        entry = self.comment_history.get(history_key)
+        if entry is None:
+            return 0
+        # Support both old format (single timestamp string) and new format (list of timestamps)
+        if isinstance(entry, list):
+            return len(entry)
+        return 1  # Old format was a single timestamp
+    
+    def can_comment_on_issue(self, repo: str, pr_number: int, issue_type: str, max_comments: int = 3) -> bool:
+        """Check if we can still comment on this issue type (haven't hit the limit)"""
+        return self.get_comment_count(repo, pr_number, issue_type) < max_comments
+    
+    def record_comment(self, repo: str, pr_number: int, issue_type: str) -> None:
+        """Record that we commented on an issue type"""
+        check_key = f"{repo}#{pr_number}"
+        history_key = f"{check_key}:{issue_type}"
+        entry = self.comment_history.get(history_key)
+        timestamp = datetime.now().isoformat()
+        
+        if entry is None:
+            # New entry - start as list
+            self.comment_history[history_key] = [timestamp]
+        elif isinstance(entry, list):
+            # Append to existing list
+            entry.append(timestamp)
+        else:
+            # Migrate old format (single string) to list
+            self.comment_history[history_key] = [entry, timestamp]
+        
+        self.save_comment_history()
     
     def run_gh_command(self, command: List[str]) -> Optional[Dict]:
         """Run a GitHub CLI command and return JSON result"""
@@ -218,6 +247,18 @@ class GitHubMonitor:
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error: {e}")
             return []
+    
+    def all_checks_complete(self, checks: List[Dict]) -> bool:
+        """Check if all CI checks have completed (not in progress or queued)"""
+        if not checks:
+            return True  # No checks means nothing to wait for
+        
+        for check in checks:
+            status = check.get('status', '').lower()
+            if status in ['queued', 'in_progress', 'pending', 'waiting']:
+                return False
+        
+        return True
     
     def has_failed_checks(self, checks: List[Dict]) -> bool:
         """Check if any checks have failed"""
@@ -409,14 +450,22 @@ class GitHubMonitor:
             for check in checks:
                 logger.info(f"    Check: {check.get('name')} - status: {check.get('status')}, conclusion: {check.get('conclusion', 'N/A')}")
         
+        # Check if all CI checks are complete before commenting
+        all_complete = self.all_checks_complete(checks)
+        logger.info(f"  All checks complete: {all_complete}")
+        
+        if not all_complete:
+            logger.info(f"  Skipping {check_key} - CI still running, will check again later")
+            return
+        
         # Check for failed checks
         has_failed = self.has_failed_checks(checks)
         logger.info(f"  Has failed checks: {has_failed}")
         
         if has_failed:
-            # Check if we've already commented on failed checks for this PR
-            if self.has_commented_on_issue(repo, pr_number, 'failed_checks'):
-                logger.info(f"  Skipping - already commented on failed checks for {check_key}")
+            comment_count = self.get_comment_count(repo, pr_number, 'failed_checks')
+            if not self.can_comment_on_issue(repo, pr_number, 'failed_checks'):
+                logger.info(f"  Skipping - already commented {comment_count}x on failed checks for {check_key}")
             else:
                 failed_checks = [
                     c for c in checks 
@@ -427,14 +476,11 @@ class GitHubMonitor:
                 
                 comment = f"@cursor there are test/linting/other issues - fix these.\n\nFailed checks: {', '.join(check_names)}"
                 
-                logger.info(f"  Posting comment for failed checks: {', '.join(check_names)}")
+                logger.info(f"  Posting comment #{comment_count + 1} for failed checks: {', '.join(check_names)}")
                 if self.post_comment(repo, pr_number, comment):
                     self.last_checks[check_key] = datetime.now().isoformat()
                     self.save_last_checks()
-                    # Track that we commented on this issue type
-                    history_key = f"{check_key}:failed_checks"
-                    self.comment_history[history_key] = datetime.now().isoformat()
-                    self.save_comment_history()
+                    self.record_comment(repo, pr_number, 'failed_checks')
                     logger.info(f"✓ Posted @cursor comment on {check_key} due to failed checks")
                 else:
                     logger.error(f"✗ Failed to post comment on {check_key}")
@@ -458,19 +504,16 @@ class GitHubMonitor:
             )
             
             if has_conflicts:
-                # Check if we've already commented on merge conflicts for this PR
-                if self.has_commented_on_issue(repo, pr_number, 'merge_conflicts'):
-                    logger.info(f"  Skipping - already commented on merge conflicts for {check_key}")
+                comment_count = self.get_comment_count(repo, pr_number, 'merge_conflicts')
+                if not self.can_comment_on_issue(repo, pr_number, 'merge_conflicts'):
+                    logger.info(f"  Skipping - already commented {comment_count}x on merge conflicts for {check_key}")
                 else:
                     comment = "@cursor there are merge conflicts that need to be resolved."
-                    logger.info(f"  Posting comment for merge conflicts")
+                    logger.info(f"  Posting comment #{comment_count + 1} for merge conflicts")
                     if self.post_comment(repo, pr_number, comment):
                         self.last_checks[check_key] = datetime.now().isoformat()
                         self.save_last_checks()
-                        # Track that we commented on this issue type
-                        history_key = f"{check_key}:merge_conflicts"
-                        self.comment_history[history_key] = datetime.now().isoformat()
-                        self.save_comment_history()
+                        self.record_comment(repo, pr_number, 'merge_conflicts')
                         logger.info(f"✓ Posted @cursor comment on {check_key} due to merge conflicts")
                     else:
                         logger.error(f"✗ Failed to post comment on {check_key}")
@@ -479,19 +522,16 @@ class GitHubMonitor:
             review_decision = pr_details.get('reviewDecision', '').lower()
             logger.info(f"  Review decision: {review_decision or 'None'}")
             if review_decision == 'changes_requested':
-                # Check if we've already commented on review requests for this PR
-                if self.has_commented_on_issue(repo, pr_number, 'review_requested'):
-                    logger.info(f"  Skipping - already commented on review requests for {check_key}")
+                comment_count = self.get_comment_count(repo, pr_number, 'review_requested')
+                if not self.can_comment_on_issue(repo, pr_number, 'review_requested'):
+                    logger.info(f"  Skipping - already commented {comment_count}x on review requests for {check_key}")
                 else:
                     comment = "@cursor review and fix the issues claude brought up"
-                    logger.info(f"  Posting comment for review requests")
+                    logger.info(f"  Posting comment #{comment_count + 1} for review requests")
                     if self.post_comment(repo, pr_number, comment):
                         self.last_checks[check_key] = datetime.now().isoformat()
                         self.save_last_checks()
-                        # Track that we commented on this issue type
-                        history_key = f"{check_key}:review_requested"
-                        self.comment_history[history_key] = datetime.now().isoformat()
-                        self.save_comment_history()
+                        self.record_comment(repo, pr_number, 'review_requested')
                         logger.info(f"✓ Posted @cursor comment on {check_key} due to review requests")
                     else:
                         logger.error(f"✗ Failed to post comment on {check_key}")
@@ -519,40 +559,49 @@ class GitHubMonitor:
                     pass
             
             if should_post_review:
-                # Check if we've already commented on code review for this PR
-                # But allow commenting again if this review is newer than our last comment
-                history_key = f"{check_key}:code_review"
-                last_comment_time_str = self.comment_history.get(history_key)
-                
-                should_comment = True
-                if last_comment_time_str:
-                    try:
-                        last_comment_time = datetime.fromisoformat(last_comment_time_str)
-                        review_time = datetime.fromisoformat(review_time_str.replace('Z', '+00:00'))
-                        if review_time.tzinfo:
-                            review_time = review_time.replace(tzinfo=None) - review_time.utcoffset()
-                        
-                        # Only skip if this review is older than or equal to our last comment
-                        if review_time <= last_comment_time:
-                            should_comment = False
-                            logger.info(f"  Skipping - review ({review_time_str}) is older than our last comment ({last_comment_time_str})")
+                # Check if we've hit the max comment limit
+                comment_count = self.get_comment_count(repo, pr_number, 'code_review')
+                if not self.can_comment_on_issue(repo, pr_number, 'code_review'):
+                    logger.info(f"  Skipping - already commented {comment_count}x on code reviews for {check_key}")
+                else:
+                    # Check if this review is newer than our last comment
+                    history_key = f"{check_key}:code_review"
+                    history_entry = self.comment_history.get(history_key)
+                    
+                    # Get the most recent comment timestamp from history
+                    last_comment_time_str = None
+                    if isinstance(history_entry, list) and history_entry:
+                        last_comment_time_str = history_entry[-1]
+                    elif isinstance(history_entry, str):
+                        last_comment_time_str = history_entry
+                    
+                    should_comment = True
+                    if last_comment_time_str:
+                        try:
+                            last_comment_time = datetime.fromisoformat(last_comment_time_str)
+                            review_time = datetime.fromisoformat(review_time_str.replace('Z', '+00:00'))
+                            if review_time.tzinfo:
+                                review_time = review_time.replace(tzinfo=None) - review_time.utcoffset()
+                            
+                            # Only skip if this review is older than or equal to our last comment
+                            if review_time <= last_comment_time:
+                                should_comment = False
+                                logger.info(f"  Skipping - review ({review_time_str}) is older than our last comment ({last_comment_time_str})")
+                            else:
+                                logger.info(f"  Review ({review_time_str}) is newer than our last comment ({last_comment_time_str}) - will comment")
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"Could not compare timestamps: {e}")
+                    
+                    if should_comment:
+                        comment = f"@cursor please review the code review from {reviewer}. If you see critical or serious issues, fix them. If it's just positive feedback with no actionable items, ignore it and don't commit any changes."
+                        logger.info(f"  Posting comment #{comment_count + 1} for code review from {reviewer}")
+                        if self.post_comment(repo, pr_number, comment):
+                            self.last_checks[check_key] = datetime.now().isoformat()
+                            self.save_last_checks()
+                            self.record_comment(repo, pr_number, 'code_review')
+                            logger.info(f"✓ Posted @cursor comment on {check_key} due to code review")
                         else:
-                            logger.info(f"  Review ({review_time_str}) is newer than our last comment ({last_comment_time_str}) - will comment")
-                    except (ValueError, TypeError) as e:
-                        logger.debug(f"Could not compare timestamps: {e}")
-                
-                if should_comment:
-                    comment = f"@cursor please review the code review from {reviewer}. If you see critical or serious issues, fix them. If it's just positive feedback with no actionable items, ignore it and don't commit any changes."
-                    logger.info(f"  Posting comment for code review from {reviewer}")
-                    if self.post_comment(repo, pr_number, comment):
-                        self.last_checks[check_key] = datetime.now().isoformat()
-                        self.save_last_checks()
-                        # Track that we commented on this issue type (update timestamp)
-                        self.comment_history[history_key] = datetime.now().isoformat()
-                        self.save_comment_history()
-                        logger.info(f"✓ Posted @cursor comment on {check_key} due to code review")
-                    else:
-                        logger.error(f"✗ Failed to post comment on {check_key}")
+                            logger.error(f"✗ Failed to post comment on {check_key}")
         
         # Skip other checks if there's a recent @cursor comment (but we already checked reviews above)
         if has_recent_cursor:
