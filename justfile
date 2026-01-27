@@ -1,87 +1,35 @@
 # agenthelper - GitHub PR comment monitor
+# Wrapper for the agenthelper CLI
 
-plist_name := "com.agenthelper.plist"
-launchd_path := env_var('HOME') / "Library/LaunchAgents" / plist_name
+cli := justfile_directory() / "cli.py"
 
 # List available commands
 default:
     @just --list
 
-# Install and start the launchd service
+# Start the agenthelper service
 start:
-    #!/usr/bin/env bash
-    set -e
-    
-    # Check if gh CLI is installed
-    if ! command -v gh &> /dev/null; then
-        echo "Error: GitHub CLI (gh) is not installed."
-        echo "Install it with: brew install gh"
-        exit 1
-    fi
-    
-    # Check if gh is authenticated
-    if ! gh auth status &> /dev/null; then
-        echo "Error: GitHub CLI is not authenticated."
-        echo "Run: gh auth login"
-        exit 1
-    fi
-    
-    # Check if Python 3 is available
-    if ! command -v python3 &> /dev/null; then
-        echo "Error: Python 3 is not installed."
-        exit 1
-    fi
-    
-    # Make script executable
-    chmod +x "{{justfile_directory()}}/agenthelper.py"
-    
-    # Stop existing service if running
-    if launchctl list | grep -q "com.agenthelper"; then
-        echo "Stopping existing service..."
-        launchctl unload "{{launchd_path}}" 2>/dev/null || true
-    fi
-    
-    # Copy plist to LaunchAgents
-    echo "Installing launchd service..."
-    cp "{{justfile_directory()}}/{{plist_name}}" "{{launchd_path}}"
-    
-    # Load the service
-    launchctl load "{{launchd_path}}"
-    
-    echo ""
-    echo "✓ agenthelper started!"
-    echo "  View logs: just logs"
-    echo "  Check status: just status"
-    echo "  Stop: just stop"
+    python3 {{cli}} start
 
-# Stop and unload the launchd service
+# Stop the agenthelper service
 stop:
-    #!/usr/bin/env bash
-    if launchctl list | grep -q "com.agenthelper"; then
-        launchctl unload "{{launchd_path}}" 2>/dev/null || true
-        rm -f "{{launchd_path}}"
-        echo "✓ agenthelper stopped and unloaded"
-    else
-        echo "agenthelper is not running"
-    fi
+    python3 {{cli}} stop
 
-# Check if agenthelper is running
+# Show status of all tracked PRs
 status:
-    #!/usr/bin/env bash
-    if launchctl list | grep -q "com.agenthelper"; then
-        echo "✓ agenthelper is running"
-        launchctl list | grep agenthelper
-    else
-        echo "✗ agenthelper is not running"
-    fi
+    python3 {{cli}} status
 
-# View logs (stdout)
-logs:
-    tail -f "{{justfile_directory()}}/agenthelper.out.log"
+# List tracked repositories
+repos:
+    python3 {{cli}} repos
 
-# View error logs
-errors:
-    tail -f "{{justfile_directory()}}/agenthelper.err.log"
+# View logs (follow mode)
+log:
+    python3 {{cli}} log -f
+
+# Merge a PR (e.g., just merge davefowler/asql#123)
+merge pr:
+    python3 {{cli}} merge {{pr}}
 
 # Run directly in foreground (for debugging)
 run:
