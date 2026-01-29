@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub PR Simplifier",
+  "version": "1.0.0",
+  "description": "Simplifies GitHub PR pages by showing CI status and merge button prominently, with tabbed comments",
+  "permissions": [],
+  "host_permissions": [
+    "https://github.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*/pull/*"],
+      "css": ["styles.css"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
