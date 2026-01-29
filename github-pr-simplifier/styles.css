@@ -1,0 +1,249 @@
+/* GitHub PR Simplifier Styles */
+
+.pr-simplifier-container {
+  max-width: 1012px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Toggle Button */
+.pr-simplifier-toggle {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  z-index: 1000;
+  background: #238636;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: background 0.2s;
+}
+
+.pr-simplifier-toggle:hover {
+  background: #2ea043;
+}
+
+/* Header Section - CI Status and Merge */
+.pr-simplifier-header {
+  background: var(--bgColor-default, #ffffff);
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-header {
+    background: var(--bgColor-default, #0d1117);
+    border-color: var(--borderColor-default, #30363d);
+  }
+}
+
+/* Tabs Container */
+.pr-simplifier-tabs {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--borderColor-default, #d0d7de);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bgColor-default, #ffffff);
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-tabs {
+    background: var(--bgColor-default, #0d1117);
+    border-color: var(--borderColor-default, #30363d);
+  }
+}
+
+/* Tab Navigation - Stacked vertically on the left or top */
+.pr-simplifier-tab-nav {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--borderColor-default, #d0d7de);
+  background: var(--bgColor-muted, #f6f8fa);
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-tab-nav {
+    background: var(--bgColor-muted, #161b22);
+    border-color: var(--borderColor-default, #30363d);
+  }
+}
+
+/* Individual Tab Button */
+.pr-simplifier-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 1px solid var(--borderColor-muted, #d8dee4);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+  gap: 12px;
+}
+
+.pr-simplifier-tab-btn:last-child {
+  border-bottom: none;
+}
+
+.pr-simplifier-tab-btn:hover {
+  background: var(--bgColor-neutral-muted, #eaeef2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-tab-btn:hover {
+    background: var(--bgColor-neutral-muted, #21262d);
+  }
+
+  .pr-simplifier-tab-btn {
+    border-color: var(--borderColor-muted, #21262d);
+  }
+}
+
+.pr-simplifier-tab-btn.active {
+  background: var(--bgColor-accent-muted, #ddf4ff);
+  border-left: 3px solid var(--borderColor-accent-emphasis, #0969da);
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-tab-btn.active {
+    background: var(--bgColor-accent-muted, #388bfd1a);
+    border-left-color: var(--borderColor-accent-emphasis, #58a6ff);
+  }
+}
+
+.pr-simplifier-tab-btn .tab-author {
+  font-weight: 600;
+  color: var(--fgColor-default, #1f2328);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.pr-simplifier-tab-btn .tab-author.is-bot {
+  color: var(--fgColor-muted, #656d76);
+  font-weight: 400;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-tab-btn .tab-author {
+    color: var(--fgColor-default, #e6edf3);
+  }
+
+  .pr-simplifier-tab-btn .tab-author.is-bot {
+    color: var(--fgColor-muted, #848d97);
+  }
+}
+
+.pr-simplifier-tab-btn .tab-time {
+  font-size: 12px;
+  color: var(--fgColor-muted, #656d76);
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-tab-btn .tab-time {
+    color: var(--fgColor-muted, #848d97);
+  }
+}
+
+/* Tab Content Area */
+.pr-simplifier-tab-content {
+  flex: 1;
+  min-height: 200px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Individual Tab Panel */
+.pr-simplifier-tab-panel {
+  display: none;
+  padding: 16px;
+}
+
+.pr-simplifier-tab-panel.active {
+  display: block;
+}
+
+/* Style the cloned comment elements */
+.pr-simplifier-tab-panel .timeline-comment,
+.pr-simplifier-tab-panel .js-timeline-item,
+.pr-simplifier-tab-panel .TimelineItem {
+  margin: 0;
+  border: none;
+  box-shadow: none;
+}
+
+/* No comments message */
+.pr-simplifier-no-comments {
+  padding: 40px;
+  text-align: center;
+  color: var(--fgColor-muted, #656d76);
+  font-style: italic;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-no-comments {
+    color: var(--fgColor-muted, #848d97);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .pr-simplifier-toggle {
+    top: auto;
+    bottom: 20px;
+    right: 20px;
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+
+  .pr-simplifier-tab-nav {
+    max-height: 200px;
+  }
+
+  .pr-simplifier-tab-btn .tab-author {
+    max-width: 100px;
+  }
+}
+
+/* Scrollbar styling for tab nav */
+.pr-simplifier-tab-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pr-simplifier-tab-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pr-simplifier-tab-nav::-webkit-scrollbar-thumb {
+  background: var(--borderColor-default, #d0d7de);
+  border-radius: 3px;
+}
+
+.pr-simplifier-tab-nav::-webkit-scrollbar-thumb:hover {
+  background: var(--borderColor-emphasis, #818b98);
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-tab-nav::-webkit-scrollbar-thumb {
+    background: var(--borderColor-default, #30363d);
+  }
+
+  .pr-simplifier-tab-nav::-webkit-scrollbar-thumb:hover {
+    background: var(--borderColor-emphasis, #6e7681);
+  }
+}
