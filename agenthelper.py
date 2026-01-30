@@ -77,7 +77,7 @@ class GitHubMonitor:
             return len(entry)
         return 1  # Old format was a single timestamp
     
-    def can_comment_on_issue(self, repo: str, pr_number: int, issue_type: str, max_comments: int = 3) -> bool:
+    def can_comment_on_issue(self, repo: str, pr_number: int, issue_type: str, max_comments: int = 8) -> bool:
         """Check if we can still comment on this issue type (haven't hit the limit)"""
         return self.get_comment_count(repo, pr_number, issue_type) < max_comments
     

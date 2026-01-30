@@ -58,30 +58,66 @@
     // Get the PR header info
     const prHeader = document.querySelector('.gh-header-meta, .js-issue-header');
 
-    // Find all timeline comments
-    const timelineItems = discussion.querySelectorAll('.js-timeline-item, .timeline-comment-group, .TimelineItem');
+    // Find all timeline items - use only top-level timeline items to avoid duplicates
+    const timelineItems = discussion.querySelectorAll('.js-timeline-item');
 
-    // Collect comments with metadata
-    const comments = [];
+    // Track seen comment bodies to avoid duplicates
+    const seenCommentBodies = new Set();
+
+    // First pass: collect all items in order, categorizing as comment or commit
+    const orderedItems = [];
     timelineItems.forEach((item, index) => {
+      const isCommit = item.querySelector('.TimelineItem-badge .octicon-git-commit, .octicon-repo-push, .octicon-git-branch') ||
+                       item.classList.contains('js-commits-list-item') || 
+                       item.querySelector('.commits-list-item');
+      
       const author = item.querySelector('.author, [data-hovercard-type="user"]')?.textContent?.trim();
       const timestamp = item.querySelector('relative-time, time-ago');
       const timeText = timestamp?.getAttribute('datetime') || timestamp?.textContent || '';
       const commentBody = item.querySelector('.comment-body, .markdown-body');
-      const isReview = item.classList.contains('js-timeline-item') && item.querySelector('.review-comment');
-      const isBotComment = author?.includes('[bot]') || author?.includes('bot');
+      const hasTextContent = commentBody && commentBody.textContent?.trim().length > 0;
 
-      if (commentBody || item.querySelector('.TimelineItem-body')) {
-        comments.push({
+      if (isCommit) {
+        orderedItems.push({
+          type: 'commit',
           element: item.cloneNode(true),
-          author: author || 'Unknown',
-          timestamp: timeText,
-          date: timestamp ? new Date(timeText) : new Date(0),
-          index: index,
-          isBot: isBotComment,
-          isReview: isReview
+          index: index
         });
+      } else if (hasTextContent) {
+        const contentKey = `${author}-${timeText}-${commentBody.textContent.trim().substring(0, 100)}`;
+        if (!seenCommentBodies.has(contentKey)) {
+          seenCommentBodies.add(contentKey);
+          const isReview = item.classList.contains('js-timeline-item') && item.querySelector('.review-comment');
+          const isBotComment = author?.includes('[bot]') || author?.includes('bot');
+          
+          orderedItems.push({
+            type: 'comment',
+            element: item.cloneNode(true),
+            author: author || 'Unknown',
+            timestamp: timeText,
+            date: timestamp ? new Date(timeText) : new Date(0),
+            index: index,
+            isBot: isBotComment,
+            isReview: isReview,
+            followingCommits: [] // Will hold commits that come after this comment
+          });
+        }
       }
+    });
+
+    // Second pass: group commits with the preceding comment
+    const comments = [];
+    let lastComment = null;
+    
+    orderedItems.forEach(item => {
+      if (item.type === 'comment') {
+        comments.push(item);
+        lastComment = item;
+      } else if (item.type === 'commit' && lastComment) {
+        // Attach this commit to the last comment
+        lastComment.followingCommits.push(item.element);
+      }
+      // If commit comes before any comment, we skip it (per user request)
     });
 
     // Sort comments by date, newest first
@@ -96,29 +132,6 @@
     toggleBtn.className = 'pr-simplifier-toggle btn btn-sm';
     toggleBtn.innerHTML = 'Show Original View';
     toggleBtn.onclick = toggleView;
-
-    // Create the header section with CI status and merge
-    const headerSection = document.createElement('div');
-    headerSection.className = 'pr-simplifier-header';
-
-    // Extract and clone the merge/CI section
-    const mergeSection = document.querySelector('.js-merge-group, .merge-message, #partial-pull-merging');
-    const branchActions = document.querySelector('.branch-action-item, .js-branch-action-container, .merge-pr');
-    const checksContainer = document.querySelector('.merge-status-list, .js-merge-status-list');
-
-    if (mergeSection) {
-      const mergeClone = mergeSection.cloneNode(true);
-      headerSection.appendChild(mergeClone);
-    } else if (branchActions) {
-      const branchClone = branchActions.cloneNode(true);
-      headerSection.appendChild(branchClone);
-    }
-
-    // Also try to get the specific merge box
-    const specificMergeBox = document.querySelector('.js-merge-box, .merge-message');
-    if (specificMergeBox && !headerSection.querySelector('.js-merge-box, .merge-message')) {
-      headerSection.appendChild(specificMergeBox.cloneNode(true));
-    }
 
     // Create tabs container
     const tabsContainer = document.createElement('div');
@@ -159,6 +172,23 @@
       tabPanel.dataset.tabIndex = idx;
       tabPanel.appendChild(comment.element);
 
+      // Append any commits that followed this comment
+      if (comment.followingCommits && comment.followingCommits.length > 0) {
+        const commitsSection = document.createElement('div');
+        commitsSection.className = 'pr-simplifier-commits-section';
+        
+        const commitsHeader = document.createElement('div');
+        commitsHeader.className = 'pr-simplifier-commits-header';
+        commitsHeader.textContent = `${comment.followingCommits.length} commit${comment.followingCommits.length > 1 ? 's' : ''} after this comment`;
+        commitsSection.appendChild(commitsHeader);
+
+        comment.followingCommits.forEach(commitEl => {
+          commitsSection.appendChild(commitEl);
+        });
+        
+        tabPanel.appendChild(commitsSection);
+      }
+
       tabContent.appendChild(tabPanel);
     });
 
@@ -175,7 +205,6 @@
 
     // Assemble the container
     container.appendChild(toggleBtn);
-    container.appendChild(headerSection);
     container.appendChild(tabsContainer);
 
     // Save original state and hide original content
@@ -210,14 +239,12 @@
 
     if (isSimplified) {
       // Show original
-      container.querySelector('.pr-simplifier-header').style.display = 'none';
       container.querySelector('.pr-simplifier-tabs').style.display = 'none';
       discussion.style.display = '';
       toggleBtn.textContent = 'Show Simplified View';
       isSimplified = false;
     } else {
       // Show simplified
-      container.querySelector('.pr-simplifier-header').style.display = '';
       container.querySelector('.pr-simplifier-tabs').style.display = '';
       discussion.style.display = 'none';
       toggleBtn.textContent = 'Show Original View';

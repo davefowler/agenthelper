@@ -8,10 +8,10 @@
 
 /* Toggle Button */
 .pr-simplifier-toggle {
-  position: fixed;
-  top: 70px;
-  right: 20px;
-  z-index: 1000;
+  position: fixed !important;
+  top: 60px !important;
+  right: 320px !important;
+  z-index: 9999 !important;
   background: #238636;
   color: white;
   border: none;
@@ -201,12 +201,44 @@
   }
 }
 
+/* Commits section after comments */
+.pr-simplifier-commits-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--borderColor-muted, #d8dee4);
+}
+
+.pr-simplifier-commits-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fgColor-muted, #656d76);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pr-simplifier-commits-section {
+    border-color: var(--borderColor-muted, #30363d);
+  }
+
+  .pr-simplifier-commits-header {
+    color: var(--fgColor-muted, #848d97);
+  }
+}
+
 /* Responsive adjustments */
+@media (max-width: 1280px) {
+  .pr-simplifier-toggle {
+    right: 20px !important;
+  }
+}
+
 @media (max-width: 768px) {
   .pr-simplifier-toggle {
-    top: auto;
-    bottom: 20px;
-    right: 20px;
+    top: auto !important;
+    bottom: 20px !important;
+    right: 20px !important;
     font-size: 12px;
     padding: 6px 12px;
   }
