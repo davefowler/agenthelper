@@ -71,7 +71,12 @@
                        item.classList.contains('js-commits-list-item') || 
                        item.querySelector('.commits-list-item');
       
-      const author = item.querySelector('.author, [data-hovercard-type="user"]')?.textContent?.trim();
+      // Try multiple selectors to find the author
+      const authorEl = item.querySelector('.author') || 
+                       item.querySelector('a[data-hovercard-type="user"]') ||
+                       item.querySelector('.timeline-comment-header .author') ||
+                       item.querySelector('[data-hovercard-type="user"]');
+      const author = authorEl?.textContent?.trim();
       const timestamp = item.querySelector('relative-time, time-ago');
       const timeText = timestamp?.getAttribute('datetime') || timestamp?.textContent || '';
       const commentBody = item.querySelector('.comment-body, .markdown-body');
@@ -90,14 +95,21 @@
           const isReview = item.classList.contains('js-timeline-item') && item.querySelector('.review-comment');
           const isBotComment = author?.includes('[bot]') || author?.includes('bot');
           
+          // Check if comment is from agenthelper (ends with agenthelper signature)
+          const bodyText = commentBody.textContent?.trim() || '';
+          const isFromAgenthelper = bodyText.endsWith('agenthelper') || 
+                                    bodyText.includes('🤖 agenthelper') ||
+                                    item.querySelector('.comment-body')?.innerHTML?.includes('agenthelper');
+          const displayAuthor = isFromAgenthelper ? 'agenthelper' : (author || 'Unknown');
+          
           orderedItems.push({
             type: 'comment',
             element: item.cloneNode(true),
-            author: author || 'Unknown',
+            author: displayAuthor,
             timestamp: timeText,
             date: timestamp ? new Date(timeText) : new Date(0),
             index: index,
-            isBot: isBotComment,
+            isBot: isBotComment || isFromAgenthelper,
             isReview: isReview,
             followingCommits: [] // Will hold commits that come after this comment
           });
