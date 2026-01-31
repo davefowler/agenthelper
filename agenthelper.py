@@ -295,6 +295,10 @@ class GitHubMonitor:
             created_at_str = comment.get('createdAt', '')
             author = comment.get('author', {}).get('login', '').lower()
             
+            # Skip comments FROM cursor itself (those aren't pings TO cursor)
+            if author == 'cursor':
+                continue
+            
             # Skip code review comments that mention @cursor (they're reviews, not @cursor commands)
             # Code reviews often mention @cursor but aren't actual @cursor commands
             is_code_review_comment = (
@@ -426,6 +430,12 @@ class GitHubMonitor:
         
         for comment in comments:
             body = comment.get('body', '').lower()
+            author = comment.get('author', {}).get('login', '').lower()
+            
+            # Skip comments FROM cursor itself (those aren't pings TO cursor)
+            if author == 'cursor':
+                continue
+                
             if '@cursor' in body:
                 try:
                     created_at_str = comment.get('createdAt', '')
